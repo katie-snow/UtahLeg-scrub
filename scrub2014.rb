@@ -111,19 +111,24 @@ if __FILE__ == $0
 
     # Sponsors and Links #
     # Regex Positive Lookbehind functionality.  Search for this if you need help adjusting this regex
-    # Search backwards through the string looking for ': ' but don't include in the resulting string
+    # Search backwards through the string looking for 'Leg=' but don't include in the resulting string
     # Useful web tool for regression is Rubular.com
-    # uniq removes duplicate entries
-    #sponsorTmp = browser.div(:id, 'billsponsordiv').table[0][1].text.scan(/(?<=: ).*/).uniq
+    
     sponsorOutputPos = outputPos
     sponsor = browser.div(:id, 'billsponsordiv').a
-    output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsor.text + '")'
+    sponsorTmp = sponsor.attribute_value("href").scan(/(?<=Leg=).*/)[0]
+    # the HREF has %20 as the space.  Replace %20 with ' '
+    sponsorTmp["%20"] = ' '
+    output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsorTmp + '")'
     
     
     if browser.div(:id, 'floorsponsordiv').exists?
       sponsorOutputPos = sponsorOutputPos + 1
       sponsor = browser.div(:id, 'floorsponsordiv').a
-      output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsor.text + '")'   
+      sponsorTmp = sponsor.attribute_value("href").scan(/(?<=Leg=).*/)[0]
+      # the HREF has %20 as the space.  Replace %20 with ' '
+      sponsorTmp["%20"] = ' '
+      output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsorTmp + '")'   
     end
     
     # Short Description #
@@ -160,11 +165,13 @@ if __FILE__ == $0
 
     # Place current location in output work-sheet
     currentLoc = searchCommittees(committee, locations.rows[i][2].text)
+    
+    # BUG - This is a terrible search, the Clerk of the House is used frequently and for many different actions
     # NOTE - Search again if the action for the clerk location was a veto
     # NOTE - If the senate ever has a veto then their location information can be added here
-    if (currentLoc == 'Clerk of the House')
-      currentLoc = searchCommittees(committee, 'Governor Vetoed')
-    end
+    #if (currentLoc == 'Clerk of the House')
+    #  currentLoc = searchCommittees(committee, 'Governor Vetoed')
+    #end
 
     # Place current location in output work-sheet
     output[tmpLocationPos,6] = currentLoc
