@@ -2,6 +2,45 @@ require 'rubygems'
 require "google_drive"
 require "watir-webdriver"
 
+# Check the following CheckBoxes
+# House 3rd Reading
+# Senate 2nd Reading
+# Senate 3rd Reading
+# UnCheck all Display section CheckBoxes
+def setupReadingCalPage (browser, baseLink)
+  browser.goto baseLink + ':443/FloorCalendars/'
+  
+  h3r = browser.div(:id, 'm1').checkbox(:name, 'c4')
+  h3r.set
+
+  s2r = browser.div(:id, 'm2').checkbox(:name, 'c14')
+  s2r.set
+
+  s3r = browser.div(:id, 'm2').checkbox(:name, 'c15')
+  s3r.set
+  
+  displayOpts = browser.div(:id, 'm3').checkboxes()
+  displayOpts.each do |option|
+    option.clear
+  end  
+end
+
+def getReadingList (browser, *args)
+  bills = {}
+  
+  args.each do |idLoc|
+    list = browser.div(:id, idLoc).ol
+    list.links.each_with_index do |entry, index|
+      arr = []
+ 
+      arr << index + 1 << entry.font.attribute_value('class')
+      bills[entry.text] = arr
+    end
+  end
+  
+  return bills
+end
+
 # The second column(Col B) has the long name for the committees
 # The first column (Col A) has the abbreviation for the committees
 def searchCommittees(ws, longName)
@@ -56,7 +95,16 @@ if __FILE__ == $0
   browser = Watir::Browser.new :ff
 
   baseLink = "http://le.utah.gov"
-
+  
+  # Get Reading Calendar information
+  ##################################
+  setupReadingCalPage(browser, baseLink)
+  
+  # collect reading calendar data, return value is a hash object {bill, is circled}
+  readingBills = getReadingList(browser, 'divScroll4', 'divScroll14', 'divScroll15')
+  
+  # Get Bill information
+  ######################
   # Don't look at the first row it has header information that is not needed by us
   bills = billData.rows.drop(1)
 
@@ -93,9 +141,12 @@ if __FILE__ == $0
     end
 
     # Bill Name and Link #
-    # Partition on B. or R. then any number of numbers then space.  The \. is making sure ruby doesn't try to do "#{look
-    # a function call
-    billTitle = browser.h3.text.partition(/(B|R)\. [0-9]* /)[2]
+    # Starting at front of the line with any number of characters, then partition on B. or R. 
+    # then any number of numbers then space.  
+    # The \. are making sure ruby doesn't try to do a function call
+    partition = browser.h3.text.partition(/^\S*(B|R)\. [0-9]* /)
+    billNum = partition[1].delete('.').chop
+    billTitle = partition[2]
     puts "Scrubbing " + bill[0] + " " + billTitle + "..."
 
     # Bill Link - Assumption Introduced link is at position [1] and Amended link is at position [2]
@@ -165,6 +216,16 @@ if __FILE__ == $0
 
     # Place current location in output work-sheet
     currentLoc = searchCommittees(committee, locations.rows[i][2].text)
+    
+    if (readingBills.has_key?(billNum))
+      readingArray = readingBills[billNum]
+      currentLoc = currentLoc + ' (' + readingArray[0].to_s + ')'
+      
+      if (readingArray[1] == "circled")
+        str = readingArray[1]
+        currentLoc = currentLoc + '(' + str[0].upcase + ')'  
+      end
+    end
     
     # BUG - This is a terrible search, the Clerk of the House is used frequently and for many different actions
     # NOTE - Search again if the action for the clerk location was a veto
