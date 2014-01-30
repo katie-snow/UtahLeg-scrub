@@ -223,7 +223,7 @@ if __FILE__ == $0
       
       if (readingArray[1] == "circled")
         str = readingArray[1]
-        currentLoc = currentLoc + '(' + str[0].upcase + ')'  
+        currentLoc = currentLoc + '(' + str + ')'  
       end
     end
     
