@@ -3,28 +3,26 @@ require "google_drive"
 require "watir-webdriver"
 
 # Check the following CheckBoxes
-# House 3rd Reading
-# Senate 2nd Reading
-# Senate 3rd Reading
+# House 3rd Reading ('c4' => 'm1')
+# Senate 2nd Reading ('c14' => 'm2')
+# Senate 3rd Reading ('c15' => 'm2')
 # UnCheck all Display section CheckBoxes
-def setupReadingCalPage (browser, baseLink)
+def setupReadingCalPage (browser, baseLink, checkboxes)
   browser.goto baseLink + ':443/FloorCalendars/'
   
-  h3r = browser.div(:id, 'm1').checkbox(:name, 'c4')
-  h3r.set
+  checkboxes.each do |checkbox, divLoc|
+    cb = browser.div(:id, divLoc).checkbox(:name, checkbox)
+    cb.set
+  end
 
-  s2r = browser.div(:id, 'm2').checkbox(:name, 'c14')
-  s2r.set
-
-  s3r = browser.div(:id, 'm2').checkbox(:name, 'c15')
-  s3r.set
-  
   displayOpts = browser.div(:id, 'm3').checkboxes()
   displayOpts.each do |option|
     option.clear
   end  
 end
 
+# Collects the data from the reading lists
+# reading list number portion of the 'class' name matches the checkbox number
 def getReadingList (browser, *args)
   bills = {}
   
@@ -34,7 +32,13 @@ def getReadingList (browser, *args)
       arr = []
  
       arr << index + 1 << entry.font.attribute_value('class')
-      bills[entry.text] = arr
+      
+      # In the reading table a substituded bill has a number before the bill number
+      # this regex will exclude the number.
+      # Any number of characters that are capital A through capital Z
+      # and any number of characters after.
+      # Example: 1HB 23 becomes HB 23
+      bills[entry.text.partition(/[A-Z]+.*/)[1]] = arr
     end
   end
   
@@ -97,10 +101,15 @@ if __FILE__ == $0
   baseLink = "http://le.utah.gov"
   
   # Get Reading Calendar information
+  # If you want more reading calendars you need to 
+  # add arguments to setupReadingCalPage and getReadingList functions
   ##################################
-  setupReadingCalPage(browser, baseLink)
+  # The hash table information
+  # Key: checkbox HTML name
+  # Value: The div the checkbox resides under
+  setupReadingCalPage(browser, baseLink, { 'c4' => 'm1', 'c14' => 'm2', 'c15' => 'm2'})
   
-  # collect reading calendar data, return value is a hash object {bill, is circled}
+  # collect reading calendar data, return value is a hash object {bill, circled}
   readingBills = getReadingList(browser, 'divScroll4', 'divScroll14', 'divScroll15')
   
   # Get Bill information
@@ -217,6 +226,7 @@ if __FILE__ == $0
     # Place current location in output work-sheet
     currentLoc = searchCommittees(committee, locations.rows[i][2].text)
     
+    # Place reading calendar information in the output work-sheet
     if (readingBills.has_key?(billNum))
       readingArray = readingBills[billNum]
       currentLoc = currentLoc + ' (' + readingArray[0].to_s + ')'
