@@ -187,7 +187,7 @@ if __FILE__ == $0
       sponsor = browser.div(:id, 'floorsponsordiv').a
       sponsorTmp = sponsor.attribute_value("href").scan(/(?<=Leg=).*/)[0]
       # the HREF has %20 as the space.  Replace %20 with ' '
-      sponsorTmp["%20"] = ' '
+      sponsorTmp = sponsorTmp.gsub("%20", ' ')
       output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsorTmp + '")'   
     end
     
