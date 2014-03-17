@@ -4,8 +4,11 @@ require "watir-webdriver"
 
 # Check the following CheckBoxes
 # House 3rd Reading ('c4' => 'm1')
+# Senate Bills ('c5' => 'm1')
 # Senate 2nd Reading ('c14' => 'm2')
 # Senate 3rd Reading ('c15' => 'm2')
+# Tab on 2rd  ('c16' => 'm2')
+# Tab on 3rd  ('c17' => 'm2')
 # UnCheck all Display section CheckBoxes
 def setupReadingCalPage (browser, baseLink, checkboxes)
   browser.goto baseLink + ':443/FloorCalendars/'
@@ -91,7 +94,6 @@ if __FILE__ == $0
 
   output = template.duplicate(billYear + " Legislative Session - Output").worksheets[0]
 
-  roster = lowvData.worksheet_by_title('legislators')
   committee = lowvData.worksheet_by_title('committees')
   billData = lowvData.worksheet_by_title('bills')
 
@@ -107,10 +109,12 @@ if __FILE__ == $0
   # The hash table information
   # Key: checkbox HTML name
   # Value: The div the checkbox resides under
-  setupReadingCalPage(browser, baseLink, { 'c4' => 'm1', 'c14' => 'm2', 'c15' => 'm2'})
+  setupReadingCalPage(browser, baseLink, { 'c4' => 'm1', 'c5' => 'm1', 
+                                           'c14' => 'm2', 'c15' => 'm2', 'c16' => 'm2', 'c17' => 'm2'})
   
   # collect reading calendar data, return value is a hash object {bill, circled}
-  readingBills = getReadingList(browser, 'divScroll4', 'divScroll14', 'divScroll15')
+  readingBills = getReadingList(browser, 'divScroll4', 'divScroll5', 'divScroll14', 
+                                         'divScroll15', 'divScroll16', 'divScroll17')
   
   # Get Bill information
   ######################
