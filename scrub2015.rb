@@ -1,47 +1,38 @@
 require 'rubygems'
+require "google/api_client"
 require "google_drive"
 require "watir-webdriver"
 
-# Check the following CheckBoxes
-# House 3rd Reading ('c4' => 'm1')
-# Senate Bills ('c5' => 'm1')
-# Senate 2nd Reading ('c14' => 'm2')
-# Senate 3rd Reading ('c15' => 'm2')
-# Tab on 2rd  ('c16' => 'm2')
-# Tab on 3rd  ('c17' => 'm2')
-# UnCheck all Display section CheckBoxes
-def setupReadingCalPage (browser, baseLink, checkboxes)
-  browser.goto baseLink + ':443/FloorCalendars/'
-  
-  checkboxes.each do |checkbox, divLoc|
-    cb = browser.div(:id, divLoc).checkbox(:name, checkbox)
-    cb.set
-  end
-
-  displayOpts = browser.div(:id, 'm3').checkboxes()
-  displayOpts.each do |option|
-    option.clear
-  end  
-end
-
 # Collects the data from the reading lists
-# reading list number portion of the 'class' name matches the checkbox number
+# Reading Calendars we want to look at
+# House 3rd Reading
+# Senate Bills
+# Senate 2nd Reading
+# Senate 3rd Reading
+# Table on Second
+# Table on Third
 def getReadingList (browser, *args)
   bills = {}
   
   args.each do |idLoc|
-    list = browser.div(:id, idLoc).ol
-    list.links.each_with_index do |entry, index|
-      arr = []
- 
-      arr << index + 1 << entry.font.attribute_value('class')
+    # The site when zero bills are in the list uses the UL tag otherwise the OL tag  
+    if (!browser.div(:id, idLoc).ul.exists?)
+      # Have to wait for AJAX to finish loading the page and for Watir to grab it,
+      # so wait for the first item in the ordered list to exist.  60 second wait I think
+      Watir::Wait.until{browser.div(:id, idLoc).ol.li.exists?}
       
-      # In the reading table a substituded bill has a number before the bill number
-      # this regex will exclude the number.
-      # Any number of characters that are capital A through capital Z
-      # and any number of characters after.
-      # Example: 1HB 23 becomes HB 23
-      bills[entry.text.partition(/[A-Z]+.*/)[1]] = arr
+      browser.div(:id, idLoc).ol.links.each.with_index do |_, idx|
+        arr = []
+     
+        arr << idx + 1 << browser.div(:id, idLoc).ol.link(index: idx).font.attribute_value('class')
+      
+        # In the reading table a substituted bill has a number before the bill number
+        # this regex will exclude the number.
+        # Any number of characters that are capital A through capital Z
+        # and any number of characters after.
+        # Example: 1HB 23 becomes HB 23
+        bills[browser.div(:id, idLoc).ol.link(index: idx).text.partition(/[A-Z]+.*/)[1]] = arr
+      end
     end
   end
   
@@ -66,18 +57,53 @@ def searchCommittees(ws, longName)
   return str
 end
 
+def connect(browser)
+  puts "\nPlease login with your Google credentials on the Firefox browser"
+  
+  # Fixes SSL Connection Error in Windows execution of Ruby
+  # Based on fix described at: https://gist.github.com/fnichol/867550
+  ENV['SSL_CERT_FILE'] = File.expand_path(File.dirname(__FILE__)) + "/cacert.pem"
+  
+  # Authorizes with OAuth and gets an access token.
+  client = Google::APIClient.new(
+      application_name: 'Utah Legislature Bill Extraction',
+      application_version: '1.0.0')
+      
+  auth = client.authorization
+  auth.client_id = "548733547850-u2bd7pnsi4deou7el50skmoj05uih25a.apps.googleusercontent.com"
+  auth.client_secret = "_dW9KyMxZ02i2uhgYbhj0zxy"
+  
+  # Need both of these scope items to be able to edit google spreadsheets
+  auth.scope =
+      "https://www.googleapis.com/auth/drive " +
+      "https://spreadsheets.google.com/feeds/"
+  auth.redirect_uri = "urn:ietf:wg:oauth:2.0:oob:auto"
+  
+  # Open the Login authorization page
+  browser.goto auth.authorization_uri.to_str
+  
+  # Give the user time to enter their credentials
+  Watir::Wait.until(60) { browser.title.include? 'Success code' }
+  
+  auth.code = browser.title.partition('=')[2]
+  auth.fetch_access_token!
+  access_token = auth.access_token
+  
+  # Creates a session.
+  session = GoogleDrive.login_with_oauth(access_token)
+  puts "Thank you - Now processing bills"
+  return session
+end
+
 if __FILE__ == $0
-  # quit unless our script gets the correct number of command line arguments
-  unless ARGV.length == 2
-    puts "Incorrect Arguments.."
-    puts "Usage: ruby scrub2014.rb <gmail user> <password>\n"
-    exit
-  end
-  billYear = '2014'
-  puts "Running program for Legislative Session " + billYear
+  billYear = '2015'
+  puts "Running program for Utah Legislative Session " + billYear
+  
+  # Output FireFox web browser
+  browser = Watir::Browser.new :ff
 
-  session = GoogleDrive.login(ARGV[0], ARGV[1])
-
+  session = connect(browser)
+ 
   # Returns nil if not found can do a check here
   lowvData = session.spreadsheet_by_title(billYear + ' Leg Session - LoWV Data')
   if lowvData.nil?
@@ -97,25 +123,18 @@ if __FILE__ == $0
   committee = lowvData.worksheet_by_title('committees')
   billData = lowvData.worksheet_by_title('bills')
 
-  # Output FireFox web browser
-  browser = Watir::Browser.new :ff
-
   baseLink = "http://le.utah.gov"
   
-  # Get Reading Calendar information
-  # If you want more reading calendars you need to 
-  # add arguments to setupReadingCalPage and getReadingList functions
-  ##################################
-  # The hash table information
-  # Key: checkbox HTML name
-  # Value: The div the checkbox resides under
-  setupReadingCalPage(browser, baseLink, { 'c4' => 'm1', 'c5' => 'm1', 
-                                           'c14' => 'm2', 'c15' => 'm2', 'c16' => 'm2', 'c17' => 'm2'})
-  
+  # Reading Calendar Information
+  ##############################
+  browser.goto baseLink + ':443/FloorCalendars/'
+  browser.div(:id, "sexpandbtn").click
+  browser.div(:id, "hexpandbtn").click
+
   # collect reading calendar data, return value is a hash object {bill, circled}
-  readingBills = getReadingList(browser, 'divScroll4', 'divScroll5', 'divScroll14', 
-                                         'divScroll15', 'divScroll16', 'divScroll17')
-  
+  readingBills = getReadingList(browser, 'dt6', 'dt7', 'dt16', 
+                                         'dt17', 'dt18', 'dt19')
+
   # Get Bill information
   ######################
   # Don't look at the first row it has header information that is not needed by us
@@ -182,7 +201,7 @@ if __FILE__ == $0
     sponsor = browser.div(:id, 'billsponsordiv').a
     sponsorTmp = sponsor.attribute_value("href").scan(/(?<=Leg=).*/)[0]
     # the HREF has %20 as the space.  Replace %20 with ' '
-    sponsorTmp["%20"] = ' '
+    sponsorTmp = sponsorTmp.gsub("%20", ' ')
     output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsorTmp + '")'
     
     
