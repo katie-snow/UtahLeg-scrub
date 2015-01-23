@@ -16,11 +16,13 @@ def getReadingList (browser, *args)
   
   args.each do |idLoc|
     # The site when zero bills are in the list uses the UL tag otherwise the OL tag  
-    if (!browser.div(:id, idLoc).ul.exists?)
+    #if (!browser.div(:id, idLoc).ul.exists?)
       # Have to wait for AJAX to finish loading the page and for Watir to grab it,
-      # so wait for the first item in the ordered list to exist.  60 second wait I think
-      Watir::Wait.until{browser.div(:id, idLoc).ol.li.exists?}
-      
+      # so wait for the first item in the ordered list to exist or for now the 
+      # ordered list in our document structure.  30 second wait
+      #Watir::Wait.until{browser.div(:id, idLoc).ol.li.exists?}
+      Watir::Wait.until{browser.div(:id, idLoc).ol.exists?}
+            
       browser.div(:id, idLoc).ol.links.each.with_index do |_, idx|
         arr = []
      
@@ -33,7 +35,7 @@ def getReadingList (browser, *args)
         # Example: 1HB 23 becomes HB 23
         bills[browser.div(:id, idLoc).ol.link(index: idx).text.partition(/[A-Z]+.*/)[1]] = arr
       end
-    end
+    #end
   end
   
   return bills
