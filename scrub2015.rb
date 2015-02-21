@@ -12,32 +12,39 @@ require "watir-webdriver"
 # Table on Second
 # Table on Third
 def getReadingList (browser, *args)
+  puts "--- Processing Reading Calendars ---"
   bills = {}
-  
+    
   args.each do |idLoc|
-    # The site when zero bills are in the list uses the UL tag otherwise the OL tag  
-    #if (!browser.div(:id, idLoc).ul.exists?)
-      # Have to wait for AJAX to finish loading the page and for Watir to grab it,
-      # so wait for the first item in the ordered list to exist or for now the 
-      # ordered list in our document structure.  30 second wait
-      #Watir::Wait.until{browser.div(:id, idLoc).ol.li.exists?}
-      Watir::Wait.until{browser.div(:id, idLoc).ol.exists?}
-            
-      browser.div(:id, idLoc).ol.links.each.with_index do |_, idx|
-        arr = []
-     
-        arr << idx + 1 << browser.div(:id, idLoc).ol.link(index: idx).font.attribute_value('class')
-      
-        # In the reading table a substituted bill has a number before the bill number
-        # this regex will exclude the number.
-        # Any number of characters that are capital A through capital Z
-        # and any number of characters after.
-        # Example: 1HB 23 becomes HB 23
-        bills[browser.div(:id, idLoc).ol.link(index: idx).text.partition(/[A-Z]+.*/)[1]] = arr
+    result = false
+
+    puts "Table '" + idLoc + "'..."
+    # Try/Catch (Rescue) because of AJAX page timing problems
+    begin
+      holdHash = {}
+ 
+      begin
+        browser.div(:id, idLoc).ol.lis.each.with_index do |_, idx|
+          arr = []
+    
+          arr << idx + 1 << browser.div(:id, idLoc).ol.li(index: idx).font.attribute_value('class')
+        
+          # In the reading table a substituted bill has a number before the bill number
+          # this regex will exclude the number.
+          # Any number of characters that are capital A through capital Z
+          # and any number of numbers after.
+          # Example: 1HB 23 becomes HB 23
+          holdHash[browser.div(:id, idLoc).ol.li(index: idx).text.partition(/[A-Z]+.\d+/)[1]] = arr
+        end
+        bills.merge!(holdHash)
+        result = true
+      rescue
+        #puts  "Exception occurred, Trying again!"
+        result = false
       end
-    #end
+    end unless result
   end
-  
+
   return bills
 end
 
@@ -60,7 +67,8 @@ def searchCommittees(ws, longName)
 end
 
 def connect(browser)
-  puts "\nPlease login with your Google credentials on the Firefox browser"
+  puts "--- Google Login ---"
+  puts "Please login with your Google credentials on the Firefox browser"
   
   # Fixes SSL Connection Error in Windows execution of Ruby
   # Based on fix described at: https://gist.github.com/fnichol/867550
@@ -93,13 +101,12 @@ def connect(browser)
   
   # Creates a session.
   session = GoogleDrive.login_with_oauth(access_token)
-  puts "Thank you - Now processing bills"
   return session
 end
 
 if __FILE__ == $0
   billYear = '2015'
-  puts "Running program for Utah Legislative Session " + billYear
+  puts "Running against " + billYear + " Utah Legislative Session"
   
   # Output FireFox web browser
   browser = Watir::Browser.new :ff
@@ -117,7 +124,7 @@ if __FILE__ == $0
   template = session.spreadsheet_by_title('Legislative Session - Template')
   if template.nil?
     puts 'Legislative Session - Template spreadsheet not found!'
-    exit
+   exit
   end
 
   output = template.duplicate(billYear + " Legislative Session - Output").worksheets[0]
@@ -153,6 +160,7 @@ if __FILE__ == $0
   # start at the first empty row
   outputPos = output.num_rows + 1
 
+  puts "--- Processing Bills ---"
   # for loop through all the bills
   bills.each do |bill|
     # Open bill in browser
@@ -207,6 +215,7 @@ if __FILE__ == $0
     output[sponsorOutputPos,3] = '=hyperlink("' + sponsor.attribute_value("href") + '";"' + sponsorTmp + '")'
     
     
+    # TODO: This div exists all the time.  Need to see if the floor Sponsor is empty text
     if browser.div(:id, 'floorsponsordiv').exists?
       sponsorOutputPos = sponsorOutputPos + 1
       sponsor = browser.div(:id, 'floorsponsordiv').a
@@ -289,5 +298,5 @@ if __FILE__ == $0
     output.save
     browser.quit
     
-    puts "Program complete"
+    puts "Complete"
 end
